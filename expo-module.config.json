@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["ExpoEzvizModule"]
+  },
+  "android": {
+    "modules": ["com.poseidon.ExpoEzvizModule"]
+  }
+}
