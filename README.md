@@ -1,6 +1,6 @@
 # Expo EZVIZ Module
 
-This module provides a React Native component and API to interact with the EZVIZ SDK for iOS, allowing you to display live and recorded video streams from EZVIZ cameras.
+This module provides a React Native component and API to interact with the EZVIZ SDK for Android and iOS, allowing you to display live and recorded video streams from EZVIZ cameras.
 
 ## Table of Contents
 
@@ -19,14 +19,15 @@ This module provides a React Native component and API to interact with the EZVIZ
 
 ## Installation
 
-Since this is a local native module, ensure it is correctly placed within your project structure (e.g., in a `modules` directory) and that your `metro.config.js` and `package.json` are configured to resolve it.
-
-After adding the module, you need to install the native dependencies for iOS:
+Install the package from npm:
 
 ```bash
-cd ios
-pod install
+npx expo install expo-ezviz
 ```
+
+This will install the package and automatically link the native dependencies. If you are not using EAS Build, you will need to run `npx expo prebuild` to generate the native `ios` and `android` directories.
+
+The config plugin will automatically add the required `NSPhotoLibraryAddUsageDescription` permission to your `Info.plist`.
 
 ## Configuration
 
