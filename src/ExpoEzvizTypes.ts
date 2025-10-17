@@ -31,6 +31,12 @@ export type DownloadErrorEvent = {
   };
 };
 
+export type PlaybackProgressEvent = {
+  nativeEvent: {
+    currentTime: number; // UTC timestamp in milliseconds
+  };
+};
+
 export type DeviceRecordFile = {
   startTime: number;
   stopTime: number;
@@ -46,6 +52,7 @@ export type ExpoEzvizModuleEvents = {
   onDownloadProgress: (event: DownloadProgressEvent) => void;
   onDownloadSuccess: (event: DownloadSuccessEvent) => void;
   onDownloadError: (event: DownloadErrorEvent) => void;
+  onPlaybackProgress: (event: PlaybackProgressEvent) => void;
 };
 
 export type ExpoEzvizViewProps = {
@@ -53,11 +60,15 @@ export type ExpoEzvizViewProps = {
   verifyCode?: string;
   accessToken?: string;
   cameraNo: number,
+  defaultSoundOn?: boolean;
+  autoplay?: boolean;
   onLoad?: () => void;
   onPictureCaptured?: (event: PictureCapturedEvent) => void;
   onPlayFailed?: (event: PlayFailedEvent) => void;
+  onPlayerMessage?: (event: any) => void;
   onDownloadProgress?: (event: DownloadProgressEvent) => void;
   onDownloadSuccess?: (event: DownloadSuccessEvent) => void;
   onDownloadError?: (event: DownloadErrorEvent) => void;
+  onPlaybackProgress?: (event: PlaybackProgressEvent) => void;
   style?: StyleProp<ViewStyle>;
 };

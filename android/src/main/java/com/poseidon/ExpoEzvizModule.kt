@@ -2,6 +2,7 @@ package com.poseidon
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import android.util.Log
 import com.videogo.exception.BaseException
 import com.videogo.openapi.EZConstants
 import com.videogo.openapi.EZGlobalSDK
@@ -48,7 +49,7 @@ class ExpoEzvizModule : Module() {
 
       EZGlobalSDK.showSDKLog(true)
       EZGlobalSDK.setDebugStreamEnable(true)
-      EZGlobalSDK.enableP2P(true)
+      EZGlobalSDK.enableP2P(false)
       EZGlobalSDK.initLib(application, appKey)
 
       if (apiUrl != null && apiUrl.isNotEmpty()) {
@@ -170,6 +171,7 @@ class ExpoEzvizModule : Module() {
       Thread {
         try {
           val deviceInfo = EZGlobalSDK.getInstance().getDeviceInfo(deviceSerial)
+          Log.d("ExpoEzvizModule", "deviceInfo: $deviceInfo")
           val expoDeviceInfo = ExpoDeviceInfo().apply {
             this.cameraNum = deviceInfo.cameraNum
             this.category = deviceInfo.category
@@ -203,7 +205,15 @@ class ExpoEzvizModule : Module() {
         view.verifyCode = verifyCode
       }
 
-      Events("onLoad", "onPlayFailed", "onPictureCaptured", "onDownloadProgress", "onDownloadSuccess", "onDownloadError")
+      Prop("autoplay") { view: ExpoEzvizView, autoplay: Boolean? ->
+        view.autoplay = autoplay ?: false
+      }
+
+      Prop("defaultSoundOn") { view: ExpoEzvizView, defaultSoundOn: Boolean? ->
+        view.setDefaultSoundOn(defaultSoundOn)
+      }
+
+      Events("onLoad", "onPlayFailed", "onPictureCaptured", "onDownloadProgress", "onDownloadSuccess", "onDownloadError", "onPlayerMessage", "onPlaybackProgress")
 
       AsyncFunction("capturePicture") { view: ExpoEzvizView ->
         view.capturePicture()
@@ -213,8 +223,8 @@ class ExpoEzvizModule : Module() {
         return@AsyncFunction view.startPlayback(recordFileDict)
       }
 
-      AsyncFunction("startLocalRecordWithFile") { view: ExpoEzvizView, path: String ->
-        return@AsyncFunction view.startLocalRecordWithFile(path)
+      AsyncFunction("stopPlayback") { view: ExpoEzvizView ->
+        return@AsyncFunction view.stopPlayback()
       }
 
       AsyncFunction("stopLocalRecord") { view: ExpoEzvizView ->
@@ -239,6 +249,23 @@ class ExpoEzvizModule : Module() {
 
       AsyncFunction("stopRealPlay") { view: ExpoEzvizView ->
         view.stopRealPlay()
+      }
+
+      AsyncFunction("pausePlayback") { view: ExpoEzvizView ->
+        return@AsyncFunction view.pausePlayback()
+      }
+
+      AsyncFunction("resumePlayback") { view: ExpoEzvizView ->
+        return@AsyncFunction view.resumePlayback()
+      }
+
+      AsyncFunction("seekPlayback") { view: ExpoEzvizView, offsetTimestamp: Double ->
+        return@AsyncFunction view.seekPlayback(offsetTimestamp)
+      }
+
+      // Renamed to match iOS for a unified API
+      AsyncFunction("startLocalRecord") { view: ExpoEzvizView, path: String ->
+        return@AsyncFunction view.startLocalRecordWithFile(path)
       }
     }
   }

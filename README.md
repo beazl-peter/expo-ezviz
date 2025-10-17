@@ -106,6 +106,8 @@ const playerRef = useRef<ExpoEzvizViewHandle>(null);
 | `deviceSerial` | `string` | Yes      | The serial number of the EZVIZ device.                |
 | `cameraNo`     | `number` | Yes      | The camera number/channel on the device (usually `1`). |
 | `verifyCode`   | `string` | Yes      | The verification code for the encrypted device stream. |
+| `autoplay`     | `boolean`| No       | If `true`, the live stream will start automatically. Defaults to `false`. |
+| `defaultSoundOn` | `boolean`| No     | Sets the initial sound state. Defaults to `false` (muted) on Android and `true` (unmuted) on iOS. |
 
 #### Event Callbacks
 
@@ -115,6 +117,8 @@ const playerRef = useRef<ExpoEzvizViewHandle>(null);
 | `onPictureCaptured`   | `{ success: boolean, error?: string }`                   | Fired after a `capturePicture()` call completes.                         |
 | `onDownloadProgress`  | `{ progress: number }`                                   | Fired periodically during a file download, with progress from `0.0` to `1.0`. |
 | `onDownloadSuccess`   | `{ path: string, savedToAlbum: boolean }`                | Fired when a video download and conversion is successful.                |
+| `onPlaybackProgress`  | `{ currentTime: number }`                                | Fired periodically during playback with the current time in milliseconds. |
+| `onPlayerMessage`     | `{ messageCode: number }`                                | Fired when the underlying player emits a message that is not otherwise handled by the module. |
 | `onDownloadError`     | `{ error: string }`                                      | Fired if an error occurs during video download or processing.            |
 
 ### Imperative Methods

@@ -18,15 +18,17 @@ import com.videogo.openapi.EZOpenSDK
 import com.videogo.openapi.EZOpenSDKListener
 import com.videogo.openapi.EZPlayer
 import com.videogo.openapi.bean.EZDeviceRecordFile
+import com.videogo.openapi.bean.EZDeviceDetailPublicInfo
 import com.videogo.stream.EZDeviceStreamDownload
 import com.videogo.util.VideoTransUtil
+import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 import java.io.File
 import java.io.IOException
 import java.util.Calendar
 
-class ExpoEzvizView(context: Context) : ExpoView(context) {
+class ExpoEzvizView(context: Context, appContext: AppContext) : ExpoView(context) {
 
     private val playerView = SurfaceView(context)
     var player: EZPlayer? = null
@@ -38,7 +40,7 @@ class ExpoEzvizView(context: Context) : ExpoView(context) {
             if (field != value) {
                 field = value
                 Log.d("ExpoEzvizView", "deviceSerial changed.")
-                createPlayer()
+                // createPlayer is now handled by onAttachedToWindow to avoid race conditions.
             }
         }
     var cameraNo: Int = 1
@@ -50,9 +52,10 @@ class ExpoEzvizView(context: Context) : ExpoView(context) {
         }
 
     var verifyCode: String? = null
-
-    private var defaultSoundOn: Boolean = true
-    private var isSoundOn: Boolean = true
+    var autoplay: Boolean = false
+    private var hasAutoplayStarted: Boolean = false
+    private var defaultSoundOn: Boolean? = null
+    private var isSoundOn: Boolean = false // Android SDK defaults to sound off
 
     // Event Dispatchers
     val onLoad by EventDispatcher()
@@ -60,14 +63,35 @@ class ExpoEzvizView(context: Context) : ExpoView(context) {
     val onPictureCaptured by EventDispatcher()
     val onDownloadSuccess by EventDispatcher()
     val onDownloadError by EventDispatcher()
+    val onPlayerMessage by EventDispatcher()
+    val onPlaybackProgress by EventDispatcher()
 
     private val playerHandler = object : Handler(Looper.getMainLooper()) {
         override fun handleMessage(msg: Message) {
             super.handleMessage(msg)
             when (msg.what) {
+                EZConstants.EZRealPlayConstants.MSG_REALPLAY_PLAY_SUCCESS -> {
+                    Log.d("ExpoEzvizView", "onPlaySuccess")
+                    // Android SDK defaults to sound OFF. Only open it if requested.
+                    if (defaultSoundOn == true) {
+                        openSound()
+                    }
+                    onLoad(emptyMap())
+                }
+                EZConstants.EZRealPlayConstants.MSG_REALPLAY_PLAY_FAIL -> {
+                    val errorInfo = msg.obj as? ErrorInfo
+                    val errorMessage = errorInfo?.description ?: "Unknown error"
+                    Log.e("ExpoEzvizView", "Play failed with error: $errorMessage")
+                    onPlayFailed(mapOf("error" to errorMessage))
+                }
                 EZConstants.EZPlaybackConstants.MSG_REMOTEPLAYBACK_PLAY_SUCCUSS -> {
                     Log.d("ExpoEzvizView", "onPlaySuccess")
-                    // Handle play success, e.g., update UI
+                    // Android SDK defaults to sound OFF. Only open it if requested.
+                    if (defaultSoundOn == true) {
+                        openSound()
+                    }
+                    onLoad(emptyMap())
+                    startPlaybackTimer()
                 }
                 EZConstants.EZPlaybackConstants.MSG_REMOTEPLAYBACK_PLAY_FAIL -> {
                     val errorInfo = msg.obj as? ErrorInfo
@@ -75,25 +99,40 @@ class ExpoEzvizView(context: Context) : ExpoView(context) {
                     Log.e("ExpoEzvizView", "Play failed with error: $errorMessage")
                     onPlayFailed(mapOf("error" to errorMessage))
                 }
-                EZConstants.EZPlaybackConstants.MSG_REMOTEPLAYBACK_PLAY_START -> {
-                    Log.d("ExpoEzvizView", "Playback started.")
-                    if (!isSoundOn) {
-                        player?.closeSound()
-                    }
-                }
+
                 else -> {
                      Log.d("ExpoEzvizView", "Received player message: ${msg.what}")
+                    onPlayerMessage(mapOf("messageCode" to msg.what))
                 }
             }
         }
     }
 
+    private val playbackTimerHandler = Handler(Looper.getMainLooper())
+    private val playbackTimerRunnable = object : Runnable {
+        override fun run() {
+            player?.getOSDTime()?.let { osdTime ->
+                onPlaybackProgress(mapOf("currentTime" to osdTime.timeInMillis.toDouble()))
+            }
+            // Poll every second
+            playbackTimerHandler.postDelayed(this, 1000)
+        }
+    }
+
+    private fun startPlaybackTimer() {
+        stopPlaybackTimer() // Ensure no multiple timers are running
+        playbackTimerHandler.post(playbackTimerRunnable)
+    }
+
+    private fun stopPlaybackTimer() {
+        playbackTimerHandler.removeCallbacks(playbackTimerRunnable)
+    }
+
     init {
-        isSoundOn = defaultSoundOn
         playerView.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
+                Log.d("ExpoEzvizView", "Surface created. Autoplay: $autoplay, HasStarted: $hasAutoplayStarted")
                 player?.setSurfaceHold(holder)
-                Log.d("ExpoEzvizView", "Surface created and set to player.")
             }
             override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
             override fun surfaceDestroyed(holder: SurfaceHolder) {
@@ -103,6 +142,14 @@ class ExpoEzvizView(context: Context) : ExpoView(context) {
         addView(playerView)
     }
 
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        Log.d("ExpoEzvizView", "onAttachedToWindow called. Creating player.")
+        // It's crucial to re-create the player here, as the view instance is reused
+        // when navigating back to the screen.
+        createPlayer()
+    }
+
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         playerView.layout(0, 0, width, height)
     }
@@ -110,11 +157,13 @@ class ExpoEzvizView(context: Context) : ExpoView(context) {
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         Log.d("ExpoEzvizView", "onDetachedFromWindow called. Stopping and destroying player.")
+        stopPlaybackTimer()
         downloader?.stop()
         downloader = null
         player?.stopRealPlay()
         player?.release()
         player = null
+        hasAutoplayStarted = false // Reset the autoplay flag for the next mount
     }
 
     // --- Public methods callable from JS ---
@@ -125,6 +174,11 @@ class ExpoEzvizView(context: Context) : ExpoView(context) {
 //        player = null
 //    }
 
+    fun getDeviceDetailInfo() {
+        val info = player?.deviceDetailInfo;
+        Log.d("ExpoEzvizView", info.toString())
+    }
+
     fun openSound() {
         player?.openSound()
         isSoundOn = true
@@ -133,6 +187,12 @@ class ExpoEzvizView(context: Context) : ExpoView(context) {
     fun closeSound() {
         player?.closeSound()
         isSoundOn = false
+    }
+
+    fun setDefaultSoundOn(defaultSoundOn: Boolean?) {
+        // If prop is null, use Android's SDK default (sound off).
+        this.defaultSoundOn = defaultSoundOn
+        Log.d("ExpoEzvizView", "Default sound prop set to: ${this.defaultSoundOn}")
     }
 
     fun startRealPlay() {
@@ -163,12 +223,35 @@ class ExpoEzvizView(context: Context) : ExpoView(context) {
         return player?.startPlayback(recordFile) ?: false
     }
 
+    fun stopPlayback(): Boolean {
+        stopPlaybackTimer()
+        return player?.stopPlayback() ?: false
+    }
+
     fun startLocalRecordWithFile(path: String): Boolean {
         return player?.startLocalRecordWithFile(path) ?: false
     }
 
     fun stopLocalRecord() {
         player?.stopLocalRecord()
+    }
+
+    fun pausePlayback(): Boolean {
+        return player?.pausePlayback() ?: false
+    }
+
+    fun resumePlayback(): Boolean {
+        return player?.resumePlayback() ?: false
+    }
+
+    fun seekPlayback(timestamp: Double): Boolean {
+        val calendar = Calendar.getInstance()
+        // JS sends timestamp in milliseconds
+        calendar.timeInMillis = timestamp.toLong()
+        Handler(Looper.getMainLooper()).post {
+            player?.seekPlayback(calendar)
+        }
+        return true
     }
 
     fun downloadRecordFile(recordFileDict: Map<String, Any>) {
@@ -282,6 +365,13 @@ class ExpoEzvizView(context: Context) : ExpoView(context) {
 
             player?.setSurfaceHold(playerView.holder)
             Log.d("ExpoEzvizView", "Player delegate and surface holder set.")
+
+            // Handle autoplay here to avoid race conditions.
+            if (autoplay && !hasAutoplayStarted) {
+                Log.d("ExpoEzvizView", "Autoplay is enabled, starting real play.")
+                startRealPlay()
+                hasAutoplayStarted = true
+            }
         }
     }
 

@@ -8,9 +8,10 @@ import
     DownloadSuccessEvent,
     PictureCapturedEvent,
     PlayFailedEvent,
-  } from "./ExpoEzvizTypes";
+    PlaybackProgressEvent,
+  } from "./src/ExpoEzvizTypes";
 
-import ExpoEzvizView, { ExpoEzvizViewHandle } from "./ExpoEzvizView";
+import ExpoEzvizView, { ExpoEzvizViewHandle } from "./src/ExpoEzvizView";
 
 const ExpoEzviz = requireNativeModule("ExpoEzviz");
 
@@ -23,7 +24,8 @@ export { ExpoEzvizView };
     DownloadSuccessEvent,
     ExpoEzvizViewHandle,
     PictureCapturedEvent,
-    PlayFailedEvent
+    PlayFailedEvent,
+    PlaybackProgressEvent
   };
 
 export default ExpoEzviz;

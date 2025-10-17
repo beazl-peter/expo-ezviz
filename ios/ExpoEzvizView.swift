@@ -24,8 +24,11 @@ class ExpoEzvizView: ExpoView {
   var accessToken: String?
   var downloadTask: EZDeviceRecordDownloadTask?
 
-  var defaultSoundOn: Bool = true
-  private var isSoundOn: Bool = true
+  var autoplay: Bool = false
+  private var hasAutoplayStarted: Bool = false
+  var playbackTimer: Timer?
+  private var defaultSoundOn: Bool? = nil
+  private var isSoundOn: Bool = true // iOS SDK defaults to sound on
 
   let onLoad = EventDispatcher()
   let onPlayFailed = EventDispatcher()
@@ -33,28 +36,36 @@ class ExpoEzvizView: ExpoView {
   let onDownloadProgress = EventDispatcher()
   let onDownloadSuccess = EventDispatcher()
   let onDownloadError = EventDispatcher()
+  let onPlayerMessage = EventDispatcher()
+  let onPlaybackProgress = EventDispatcher()
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     clipsToBounds = true
     addSubview(playerView)
-    self.isSoundOn = self.defaultSoundOn
   }
 
   override func layoutSubviews() {
     super.layoutSubviews()
     playerView.frame = bounds
+    if autoplay && !hasAutoplayStarted && player != nil {
+        hasAutoplayStarted = true
+        startRealPlay()
+    }
   }
 
   override func removeFromSuperview() {
     print("ExpoEzvizView: removeFromSuperview called. Stopping player.")
+    stopPlaybackTimer()
     player?.stopRealPlay()
     player?.destoryPlayer()
+    hasAutoplayStarted = false // Reset autoplay flag
     super.removeFromSuperview()
   }
 
     func destoryPlayer() {
         print("ExpoEzvizView: destoryPlayer() called")
+        stopPlaybackTimer()
         player?.destoryPlayer()
     }
 
@@ -72,7 +83,16 @@ class ExpoEzvizView: ExpoView {
         return self.isSoundOn
     }
 
+    func setDefaultSoundOn(_ defaultSoundOn: Bool?) {
+        // Store the prop value. We will apply it when playback starts.
+        self.defaultSoundOn = defaultSoundOn
+        print("ExpoEzvizView: Default sound prop set to: \(String(describing: self.defaultSoundOn))")
+    }
+
     func startRealPlay() {
+        // Re-create the player to ensure we are not in a playback state
+        createPlayer()
+        print("ExpoEzvizView: Starting real play.")
         player?.startRealPlay()
     }
 
@@ -107,9 +127,36 @@ class ExpoEzvizView: ExpoView {
         return self.player?.startPlayback(fromDevice: recordFile) ?? false
     }
 
+    func stopPlayback() -> Bool {
+        stopPlaybackTimer()
+        return self.player?.stopPlayback() ?? false
+    }
+
     func startLocalRecord(with path: String) -> Bool {
         return self.player?.startLocalRecord(withPathExt: path) ?? false
     }
+
+//    func stopLocalRecord() {
+//        // This should be stopLocalRecordExt() with a complete callback
+//        self.player?.stopLocalRecord()
+//    }
+
+    func pausePlayback() -> Bool {
+        return self.player?.pausePlayback() ?? false
+    }
+
+    func resumePlayback() -> Bool {
+        return self.player?.resumePlayback() ?? false
+    }
+
+    func seekPlayback(to timestamp: Double) {
+        // JS sends timestamp in milliseconds
+        let offsetTime = Date(timeIntervalSince1970: timestamp / 1000)
+        self.player?.seekPlayback(offsetTime)
+        // Seeking doesn't emit a message, so we restart the timer manually
+        self.startPlaybackTimer()
+    }
+
 
     func downloadRecordFile(from recordFileDict: [String: Any]) {
         let recordFile = EZDeviceRecordFile()
@@ -277,6 +324,23 @@ class ExpoEzvizView: ExpoView {
       print("ExpoEzvizView: Player view set.")
     }
   }
+
+  func startPlaybackTimer() {
+    stopPlaybackTimer() // Invalidate existing timer
+    playbackTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        guard let self = self, let player = self.player else { return }
+        if let osdTime = player.getOSDTime() {
+            // Convert to milliseconds for consistency with Android
+            let currentTime = osdTime.timeIntervalSince1970 * 1000
+            self.onPlaybackProgress(["currentTime": currentTime])
+        }
+    }
+  }
+
+  func stopPlaybackTimer() {
+    playbackTimer?.invalidate()
+    playbackTimer = nil
+  }
 }
 
 extension ExpoEzvizView: EZPlayerDelegate {
@@ -289,11 +353,21 @@ extension ExpoEzvizView: EZPlayerDelegate {
 
   func player(_ player: EZPlayer!, didReceivedMessage messageCode: Int) {
     print("ExpoEzvizView: Received message: \(messageCode)")
-    // Corresponds to PLAYER_PLAYBACK_START in Objective-C
-    if messageCode == 2002 {
-        if !self.isSoundOn {
-            player.closeSound()
+    // Corresponds to PLAYER_PLAYBACK_START (2002) and PLAYER_PLAY_SUCCUSS (200)
+    if messageCode == 200 {
+        // This is the success message for both live and recorded playback.
+        DispatchQueue.main.async {
+            // iOS SDK defaults to sound ON. Only close it if requested.
+            if self.defaultSoundOn == false {
+                self.closeSound()
+            }
+            self.onLoad([:])
         }
+    } else if messageCode == 2002 {
+        // Start timer when playback starts
+        startPlaybackTimer()
+    } else {
+        self.onPlayerMessage(["messageCode": messageCode])
     }
   }
 }

@@ -15,6 +15,8 @@ public class ExpoEzvizModule: Module {
     Events("onLoad")
 
     AsyncFunction("initSDK") { (appKey: String, apiUrl: String?) in
+      // Disable P2P before initializing the SDK
+      EZOpenSDK.enableP2P(false)
       if let url = apiUrl, !url.isEmpty {
         // set debug mode first
         EZOpenSDK.setDebugLogEnable(true)
@@ -33,18 +35,6 @@ public class ExpoEzvizModule: Module {
       print("EzvizModule: Setting Access Token")
       EZOpenSDK.setAccessToken(accessToken)
     }
-
-    AsyncFunction("capturePicture") { (viewTag: Int) in
-      // We must dispatch to the main thread to find the view
-      DispatchQueue.main.async {
-        guard let view = self.appContext?.findView(withTag: viewTag, ofType: ExpoEzvizView.self) else {
-          print("EzvizModule: Could not find view with tag \(viewTag)")
-          return
-        }
-        view.capturePicture()
-      }
-    }
-
 
     AsyncFunction("searchRecordFileFromDevice") { (deviceSerial: String, cameraNo: Int, beginTimeString: String, endTimeString: String, promise: Promise) in
       let dateFormatter = DateFormatter()
@@ -77,81 +67,6 @@ public class ExpoEzvizModule: Module {
         }
         promise.resolve(serializableRecords)
       }
-    }
-
-    AsyncFunction("startPlaybackFromDevice") { (viewTag: Int, recordFileDict: [String: Any], promise: Promise) in
-      DispatchQueue.main.async {
-        guard let view = self.appContext?.findView(withTag: viewTag, ofType: ExpoEzvizView.self) else {
-          promise.reject("view-not-found", "Could not find view with tag \(viewTag)")
-          return
-        }
-
-        let success = view.startPlayback(from: recordFileDict)
-        promise.resolve(success)
-      }
-    }
-
-    AsyncFunction("startLocalRecord") { (viewTag: Int, path: String, promise: Promise) in
-      DispatchQueue.main.async {
-        guard let view = self.appContext?.findView(withTag: viewTag, ofType: ExpoEzvizView.self) else {
-          promise.reject("view-not-found", "Could not find view with tag \(viewTag)")
-          return
-        }
-
-        let success = view.startLocalRecord(with: path)
-        promise.resolve(success)
-      }
-    }
-
-    AsyncFunction("downloadRecordFile") { (viewTag: Int, recordFileDict: [String: Any]) in
-        DispatchQueue.main.async {
-            guard let view = self.appContext?.findView(withTag: viewTag, ofType: ExpoEzvizView.self) else {
-                return
-            }
-            view.downloadRecordFile(from: recordFileDict)
-        }
-    }
-
-    AsyncFunction("openSound") { (viewTag: Int, promise: Promise) in
-        DispatchQueue.main.async {
-            guard let view = self.appContext?.findView(withTag: viewTag, ofType: ExpoEzvizView.self) else {
-                promise.reject("view-not-found", "Could not find view with tag \(viewTag)")
-                return
-            }
-            view.openSound()
-            promise.resolve(true)
-        }
-    }
-
-    AsyncFunction("closeSound") { (viewTag: Int, promise: Promise) in
-        DispatchQueue.main.async {
-            guard let view = self.appContext?.findView(withTag: viewTag, ofType: ExpoEzvizView.self) else {
-                promise.reject("view-not-found", "Could not find view with tag \(viewTag)")
-                return
-            }
-            view.closeSound()
-            promise.resolve(true)
-        }
-    }
-
-    AsyncFunction("startRealPlay") { (viewTag: Int) in
-        DispatchQueue.main.async {
-            guard let view = self.appContext?.findView(withTag: viewTag, ofType: ExpoEzvizView.self) else {
-                // It's better to reject the promise if the view is not found
-                return
-            }
-            view.startRealPlay()
-        }
-    }
-
-    AsyncFunction("stopRealPlay") { (viewTag: Int) in
-        DispatchQueue.main.async {
-            guard let view = self.appContext?.findView(withTag: viewTag, ofType: ExpoEzvizView.self) else {
-                // It's better to reject the promise if the view is not found
-                return
-            }
-            view.stopRealPlay()
-        }
     }
 
     AsyncFunction("addDevice") { (deviceSerial: String, verifyCode: String, promise: Promise) in
@@ -253,8 +168,63 @@ public class ExpoEzvizModule: Module {
       Prop("cameraNo") { (view: ExpoEzvizView, prop: Int) in view.cameraNo = prop }
       Prop("accessToken") { (view: ExpoEzvizView, prop: String?) in view.accessToken = prop }
       Prop("verifyCode") { (view: ExpoEzvizView, prop: String?) in view.verifyCode = prop }
+      Prop("autoplay") { (view: ExpoEzvizView, prop: Bool?) in view.autoplay = prop ?? false }
+      Prop("defaultSoundOn") { (view: ExpoEzvizView, prop: Bool?) in view.setDefaultSoundOn(prop) }
 
-      Events("onLoad", "onPlayFailed", "onPictureCaptured", "onDownloadProgress", "onDownloadSuccess", "onDownloadError")
+      Events("onLoad", "onPlayFailed", "onPictureCaptured", "onDownloadProgress", "onDownloadSuccess", "onDownloadError", "onPlayerMessage", "onPlaybackProgress")
+
+      // Imperative methods are now defined on the view, matching Android.
+      AsyncFunction("capturePicture") { (view: ExpoEzvizView) in
+        view.capturePicture()
+      }
+
+      AsyncFunction("startPlayback") { (view: ExpoEzvizView, recordFileDict: [String: Any]) -> Bool in
+        return view.startPlayback(from: recordFileDict)
+      }
+
+      AsyncFunction("stopPlayback") { (view: ExpoEzvizView) -> Bool in
+        return view.stopPlayback()
+      }
+
+      AsyncFunction("startLocalRecord") { (view: ExpoEzvizView, path: String) -> Bool in
+        return view.startLocalRecord(with: path)
+      }
+
+//      AsyncFunction("stopLocalRecord") { (view: ExpoEzvizView) -> Void in
+//        view.stopLocalRecord()
+//      }
+
+      AsyncFunction("downloadRecordFile") { (view: ExpoEzvizView, recordFileDict: [String: Any]) in
+        view.downloadRecordFile(from: recordFileDict)
+      }
+
+      AsyncFunction("openSound") { (view: ExpoEzvizView) in
+        view.openSound()
+      }
+
+      AsyncFunction("closeSound") { (view: ExpoEzvizView) in
+        view.closeSound()
+      }
+
+      AsyncFunction("startRealPlay") { (view: ExpoEzvizView) in
+        view.startRealPlay()
+      }
+
+      AsyncFunction("stopRealPlay") { (view: ExpoEzvizView) in
+        view.stopRealPlay()
+      }
+
+      AsyncFunction("pausePlayback") { (view: ExpoEzvizView) -> Bool in
+        return view.pausePlayback()
+      }
+
+      AsyncFunction("resumePlayback") { (view: ExpoEzvizView) -> Bool in
+        return view.resumePlayback()
+      }
+
+      AsyncFunction("seekPlayback") { (view: ExpoEzvizView, offsetTimestamp: Double) in
+        view.seekPlayback(to: offsetTimestamp)
+      }
     }
   }
 
