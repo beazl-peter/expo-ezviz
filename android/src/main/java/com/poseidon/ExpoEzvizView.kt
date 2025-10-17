@@ -18,7 +18,6 @@ import com.videogo.openapi.EZOpenSDK
 import com.videogo.openapi.EZOpenSDKListener
 import com.videogo.openapi.EZPlayer
 import com.videogo.openapi.bean.EZDeviceRecordFile
-import com.videogo.openapi.bean.EZDeviceDetailPublicInfo
 import com.videogo.stream.EZDeviceStreamDownload
 import com.videogo.util.VideoTransUtil
 import expo.modules.kotlin.AppContext
@@ -28,8 +27,7 @@ import java.io.File
 import java.io.IOException
 import java.util.Calendar
 
-class ExpoEzvizView(context: Context, appContext: AppContext) : ExpoView(context) {
-
+class ExpoEzvizView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
     private val playerView = SurfaceView(context)
     var player: EZPlayer? = null
     private var downloader: EZDeviceStreamDownload? = null
@@ -111,7 +109,7 @@ class ExpoEzvizView(context: Context, appContext: AppContext) : ExpoView(context
     private val playbackTimerHandler = Handler(Looper.getMainLooper())
     private val playbackTimerRunnable = object : Runnable {
         override fun run() {
-            player?.getOSDTime()?.let { osdTime ->
+            player?.osdTime?.let { osdTime ->
                 onPlaybackProgress(mapOf("currentTime" to osdTime.timeInMillis.toDouble()))
             }
             // Poll every second
@@ -167,17 +165,6 @@ class ExpoEzvizView(context: Context, appContext: AppContext) : ExpoView(context
     }
 
     // --- Public methods callable from JS ---
-
-//    fun destroyPlayer() {
-//        Log.d("ExpoEzvizView", "destroyPlayer() called")
-//        player?.release()
-//        player = null
-//    }
-
-    fun getDeviceDetailInfo() {
-        val info = player?.deviceDetailInfo;
-        Log.d("ExpoEzvizView", info.toString())
-    }
 
     fun openSound() {
         player?.openSound()

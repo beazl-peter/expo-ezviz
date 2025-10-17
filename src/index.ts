@@ -9,9 +9,9 @@ import
     PictureCapturedEvent,
     PlayFailedEvent,
     PlaybackProgressEvent,
-  } from "./src/ExpoEzvizTypes";
+  } from "./ExpoEzvizTypes";
 
-import ExpoEzvizView, { ExpoEzvizViewHandle } from "./src/ExpoEzvizView";
+import ExpoEzvizView, { ExpoEzvizViewHandle } from "./ExpoEzvizView";
 
 const ExpoEzviz = requireNativeModule("ExpoEzviz");
 
