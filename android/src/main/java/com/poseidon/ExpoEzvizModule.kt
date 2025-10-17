@@ -192,7 +192,7 @@ class ExpoEzvizModule : Module() {
       }.start()
     }
 
-    View(ExpoEzvizView::class) { view ->
+    View(ExpoEzvizView::class) {
       Prop("deviceSerial") { view: ExpoEzvizView, deviceSerial: String? ->
         view.deviceSerial = deviceSerial
       }
