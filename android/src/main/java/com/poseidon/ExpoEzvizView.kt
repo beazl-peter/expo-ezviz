@@ -28,6 +28,7 @@ import java.io.IOException
 import java.util.Calendar
 
 class ExpoEzvizView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
+
     private val playerView = SurfaceView(context)
     var player: EZPlayer? = null
     private var downloader: EZDeviceStreamDownload? = null
@@ -165,6 +166,17 @@ class ExpoEzvizView(context: Context, appContext: AppContext) : ExpoView(context
     }
 
     // --- Public methods callable from JS ---
+
+//    fun destroyPlayer() {
+//        Log.d("ExpoEzvizView", "destroyPlayer() called")
+//        player?.release()
+//        player = null
+//    }
+
+    fun getDeviceDetailInfo() {
+        val info = player?.deviceDetailInfo
+        Log.d("ExpoEzvizView", info.toString())
+    }
 
     fun openSound() {
         player?.openSound()

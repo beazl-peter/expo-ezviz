@@ -6,8 +6,6 @@ import android.util.Log
 import com.videogo.exception.BaseException
 import com.videogo.openapi.EZConstants
 import com.videogo.openapi.EZGlobalSDK
-import com.videogo.openapi.bean.EZDeviceInfo
-import com.videogo.openapi.bean.EZDeviceRecordFile
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
