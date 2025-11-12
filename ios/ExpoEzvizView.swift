@@ -90,10 +90,25 @@ class ExpoEzvizView: ExpoView {
     }
 
     func startRealPlay() {
-        // Re-create the player to ensure we are not in a playback state
-        createPlayer()
-        print("ExpoEzvizView: Starting real play.")
-        player?.startRealPlay()
+        let startBlock = { [weak self] in
+            guard let self = self else { return }
+            print("ExpoEzvizView: Starting real play.")
+            self.player?.startRealPlay()
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            // Ensure we are not in playback state before starting live view.
+            self.player?.stopPlayback()
+
+            if self.player == nil {
+                self.createPlayer {
+                    startBlock()
+                }
+            } else {
+                startBlock()
+            }
+        }
     }
 
     func stopRealPlay() {
@@ -300,28 +315,44 @@ class ExpoEzvizView: ExpoView {
     }
 
 
-  func createPlayer() {
+  func createPlayer(completion: (() -> Void)? = nil) {
     print("ExpoEzvizView: createPlayer() called on thread: \(Thread.current). Is main thread? \(Thread.isMainThread)")
     guard let deviceSerial = self.deviceSerial, !deviceSerial.isEmpty else {
       print("ExpoEzvizView: createPlayer() aborted, deviceSerial is nil or empty.")
+      completion?()
       return
     }
 
-    // All UI operations and SDK calls that interact with views must be on the main thread.
-    // And we must destroy the old player if it exists
-    DispatchQueue.main.async {
-      print("ExpoEzvizView: Executing player creation on main thread.")
-      self.player = EZOpenSDK.createPlayer(withDeviceSerial: deviceSerial, cameraNo: self.cameraNo)
-      print("ExpoEzvizView: Player instance created.")
-      
-      if let code = self.verifyCode {
-        self.player?.setPlayVerifyCode(code)
-        print("ExpoEzvizView: Verify code set.")
-      }
+    let creationBlock = { [weak self] in
+        guard let self = self else { return }
+        print("ExpoEzvizView: Executing player creation on main thread.")
 
-      self.player?.delegate = self
-      self.player?.setPlayerView(self.playerView)
-      print("ExpoEzvizView: Player view set.")
+        // Clean up any existing player before creating a new instance.
+        self.player?.stopRealPlay()
+        self.player?.stopPlayback()
+        self.player?.destoryPlayer()
+
+        self.player = EZOpenSDK.createPlayer(withDeviceSerial: deviceSerial, cameraNo: self.cameraNo)
+        print("ExpoEzvizView: Player instance created.")
+
+        if let code = self.verifyCode {
+          self.player?.setPlayVerifyCode(code)
+          print("ExpoEzvizView: Verify code set.")
+        }
+
+        self.player?.delegate = self
+        self.player?.setPlayerView(self.playerView)
+        print("ExpoEzvizView: Player view set.")
+        completion?()
+    }
+
+    // All UI operations and SDK calls that interact with views must be on the main thread.
+    if Thread.isMainThread {
+        creationBlock()
+    } else {
+        DispatchQueue.main.async {
+            creationBlock()
+        }
     }
   }
 
@@ -353,9 +384,9 @@ extension ExpoEzvizView: EZPlayerDelegate {
 
   func player(_ player: EZPlayer!, didReceivedMessage messageCode: Int) {
     print("ExpoEzvizView: Received message: \(messageCode)")
-    // Corresponds to PLAYER_PLAYBACK_START (2002) and PLAYER_PLAY_SUCCUSS (200)
-    if messageCode == 200 {
-        // This is the success message for both live and recorded playback.
+    // Corresponds to PLAYER_PLAYBACK_START (2002) and PLAYER_PLAY_SUCCUSS (200 / 102)
+    if messageCode == 200 || messageCode == 102 {
+        // Treat both live and recorded success messages uniformly.
         DispatchQueue.main.async {
             // iOS SDK defaults to sound ON. Only close it if requested.
             if self.defaultSoundOn == false {
